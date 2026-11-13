@@ -2,8 +2,8 @@
 
 <div align="center">
 
-**基于 TypeScript 全栈的 AI 短剧自动化生产平台**<br>
-**A full-stack TypeScript platform for automated AI short-drama production**
+**面向短剧创作与制作的 AI 工作台**<br>
+**An AI workbench for short-drama creation and production**
 
 [![Node Version](https://img.shields.io/badge/Node.js-20+-339933?style=flat&logo=node.js)](https://nodejs.org)
 [![Vue Version](https://img.shields.io/badge/Vue-3.x-4FC08D?style=flat&logo=vue.js)](https://vuejs.org)
@@ -41,22 +41,25 @@ After deploying, paste the key in "Settings → Huobao Quick Setup" to write thr
 
 ## 📖 项目简介 / Overview
 
-Huobao Drama 是一个基于 AI 的短剧自动化生产平台，实现从剧本生成、角色设计、分镜制作到视频合成的全流程自动化。<br>
-Huobao Drama is an AI-powered short-drama production platform that automates the entire pipeline: script generation, character design, storyboard breakdown, and video compositing.
+火宝短剧（Huobao Drama）是面向短剧制作的 AI 创作工作台。它以项目为中心管理剧本、角色、场景、道具、分镜和生成素材，并通过 AI Agent 辅助剧本改写、创作资产提取与分镜拆解。工作台可连接图片和视频生成服务，支持 Muse 视频任务、海报放大预览及剧集素材管理。<br>
+Huobao Drama is an AI workbench for short-drama production. It organizes scripts, characters, scenes, props, storyboards, and generated media by project. AI agents assist with script rewriting, asset extraction, and storyboard breakdown; configured image and video services handle generation, including Muse video tasks.
+
+> **当前源码版本 / Current source version: 4.0.12（火宝改造版，基于上游 4.0.11 / Huobao customization based on upstream 4.0.11）**。改进包括 Muse 视频流程、分镜与服装连续性提示词规则、剧本和素材关联，以及海报预览。4.0.12 安装包尚未发布，下载区仍提供已发布的上游 4.0.11。<br>
+> Improvements cover the Muse video workflow, storyboard and wardrobe-continuity prompt rules, script/media linking, and poster preview. A 4.0.12 installer has not been released; download links still point to the published upstream 4.0.11 build.
 
 ### 🎯 核心价值 / Core Value
 
-- **🤖 AI 驱动**：使用大语言模型解析剧本，提取角色、场景和分镜信息<br>
-  **🤖 AI-Driven**: LLMs parse scripts and extract characters, scenes, and storyboard information
+- **📝 剧本与分镜 / Scripts & Storyboards**：AI 辅助剧本改写、创作资产提取和分镜拆解<br>
+  AI-assisted script rewriting, asset extraction, and storyboard breakdown
 
-- **🎨 智能创作**：AI 绘图生成角色形象和场景背景<br>
-  **🎨 Intelligent Creation**: AI image generation for character designs and scene backgrounds
+- **🎨 创作资产 / Creative Assets**：管理角色、场景、道具、提示词和参考素材<br>
+  Manage characters, scenes, props, prompts, and reference media
 
-- **📹 视频生成**：基于文生视频和图生视频模型自动生成分镜视频<br>
-  **📹 Video Generation**: Text-to-video and image-to-video models automatically produce storyboard clips
+- **📹 图片与视频 / Image & Video**：通过已配置的模型服务生成图片和分镜视频，包含 Muse 视频适配<br>
+  Generate images and storyboard clips through configured providers, including Muse video support
 
-- **🔄 工作流**：完整的短剧制作工作流，从创意到成片一站式完成<br>
-  **🔄 End-to-End Workflow**: A complete pipeline from idea to finished episode
+- **🎞️ 剧集制作 / Episode Production**：管理生成任务、预览海报与素材，并完成剧集剪辑和导出<br>
+  Track generation, preview posters and media, and assemble and export episodes
 
 ### 🛠️ 技术架构 / Architecture
 
@@ -181,7 +184,7 @@ No config files — everything is set via environment variables (all have defaul
 
 ```bash
 # 克隆项目 / Clone the repository
-git clone https://github.com/chatfire-AI/huobao-drama.git
+git clone https://github.com/yongshengdizi/huobao-drama.git
 cd huobao-drama
 
 # 安装后端依赖 / Install backend dependencies

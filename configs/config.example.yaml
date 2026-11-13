@@ -1,6 +1,6 @@
 app:
   name: "Huobao Drama API"
-  version: "1.0.0"
+  version: "4.0.12"
   debug: true
   language: "zh" # 系统语言：zh(中文) 或 en(英文)
 

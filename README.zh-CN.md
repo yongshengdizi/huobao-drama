@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**基于 TypeScript 全栈的 AI 短剧自动化生产平台**
+**面向短剧创作与制作的 AI 工作台**
 
 [![Node Version](https://img.shields.io/badge/Node.js-20+-339933?style=flat&logo=node.js)](https://nodejs.org)
 [![Vue Version](https://img.shields.io/badge/Vue-3.x-4FC08D?style=flat&logo=vue.js)](https://vuejs.org)
@@ -28,14 +28,16 @@
 
 ## 📖 项目简介
 
-Huobao Drama 是一个基于 AI 的短剧自动化生产平台，实现从剧本生成、角色设计、分镜制作到视频合成的全流程自动化。
+火宝短剧（Huobao Drama）是面向短剧制作的 AI 创作工作台。它以项目为中心管理剧本、角色、场景、道具、分镜和生成素材，并通过 AI Agent 辅助剧本改写、创作资产提取与分镜拆解。工作台可连接图片和视频生成服务，支持 Muse 视频任务、海报放大预览及剧集素材管理。
+
+> **当前源码版本：4.0.12（火宝改造版，基于上游 4.0.11）**。本版本改进 Muse 视频生成流程、分镜与服装连续性提示词规则、剧本和素材关联，以及海报预览。4.0.12 安装包尚未发布，下载区仍提供已发布的上游 4.0.11。
 
 ### 🎯 核心价值
 
-- **🤖 AI 驱动**：使用大语言模型解析剧本，提取角色、场景和分镜信息
-- **🎨 智能创作**：AI 绘图生成角色形象和场景背景
-- **📹 视频生成**：基于文生视频和图生视频模型自动生成分镜视频
-- **🔄 工作流**：完整的短剧制作工作流，从创意到成片一站式完成
+- **📝 剧本与分镜**：AI 辅助剧本改写、角色/场景/道具提取和分镜拆解
+- **🎨 创作资产**：管理人物、场景、道具、图片提示词及参考素材
+- **📹 图片与视频**：通过已配置的模型服务生成图片和分镜视频，支持 Muse 视频适配
+- **🎞️ 剧集制作**：集中管理生成任务、预览海报与素材，并完成剧集剪辑和导出
 
 ### 🛠️ 技术架构
 
@@ -133,7 +135,7 @@ data/       — 生成资源文件与 SQLite 数据库
 
 ```bash
 # 克隆项目
-git clone https://github.com/chatfire-AI/huobao-drama.git
+git clone https://github.com/yongshengdizi/huobao-drama.git
 cd huobao-drama
 
 # 安装后端依赖

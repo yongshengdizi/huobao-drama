@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**TypeScript 풀스택 기반 AI 숏드라마 자동 제작 플랫폼**
+**숏드라마 제작과 편집을 위한 AI 워크벤치**
 
 [![Node Version](https://img.shields.io/badge/Node.js-20+-339933?style=flat&logo=node.js)](https://nodejs.org)
 [![Vue Version](https://img.shields.io/badge/Vue-3.x-4FC08D?style=flat&logo=vue.js)](https://vuejs.org)
@@ -28,14 +28,16 @@
 
 ## 📖 프로젝트 소개
 
-Huobao Drama는 AI 기반 숏드라마 자동 제작 플랫폼으로, 각본 생성, 캐릭터 디자인, 스토리보드 제작부터 영상 합성까지 전 과정을 자동화합니다.
+Huobao Drama는 숏드라마 제작을 위한 AI 워크벤치입니다. 프로젝트별로 대본, 캐릭터, 장면, 소품, 스토리보드와 생성된 미디어를 관리합니다. AI Agent가 대본 재작성, 제작 자산 추출, 스토리보드 분해를 돕고, 설정된 이미지·영상 서비스로 콘텐츠를 생성합니다. Muse 영상 작업도 지원합니다.
+
+> **현재 소스 버전: 4.0.12 (upstream 4.0.11 기반 Huobao 개조판)**. Muse 영상 흐름, 스토리보드 및 의상 연속성 프롬프트 규칙, 대본과 미디어 연결, 포스터 미리보기를 개선했습니다. 4.0.12 설치 파일은 아직 공개되지 않아 다운로드 링크는 공개된 upstream 4.0.11을 가리킵니다.
 
 ### 🎯 핵심 가치
 
-- **🤖 AI 기반**：대규모 언어 모델로 각본을 분석하여 캐릭터, 장면, 스토리보드 정보를 추출
-- **🎨 지능형 창작**：AI 이미지 생성으로 캐릭터 이미지와 장면 배경 제작
-- **📹 영상 생성**：텍스트→영상 및 이미지→영상 모델로 스토리보드 영상 자동 생성
-- **🔄 워크플로**：아이디어부터 완성 영상까지 숏드라마 제작 전 과정을 한 곳에서 완료
+- **📝 대본과 스토리보드**：AI 기반 대본 재작성, 제작 자산 추출, 스토리보드 분해
+- **🎨 제작 자산**：캐릭터, 장면, 소품, 프롬프트와 참고 미디어 관리
+- **📹 이미지와 영상**：설정된 서비스로 이미지와 스토리보드 영상 생성, Muse 영상 지원
+- **🎞️ 에피소드 제작**：생성 작업과 미디어 관리, 포스터 미리보기, 영상 편집 및 내보내기
 
 ### 🛠️ 기술 아키텍처
 
@@ -133,7 +135,7 @@ data/       — 생성된 에셋과 SQLite 데이터베이스
 
 ```bash
 # 저장소 클론
-git clone https://github.com/chatfire-AI/huobao-drama.git
+git clone https://github.com/yongshengdizi/huobao-drama.git
 cd huobao-drama
 
 # 백엔드 의존성 설치

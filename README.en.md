@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**A full-stack TypeScript platform for automated AI short-drama production**
+**An AI workbench for short-drama creation and production**
 
 [![Node Version](https://img.shields.io/badge/Node.js-20+-339933?style=flat&logo=node.js)](https://nodejs.org)
 [![Vue Version](https://img.shields.io/badge/Vue-3.x-4FC08D?style=flat&logo=vue.js)](https://vuejs.org)
@@ -28,14 +28,16 @@ After deploying, paste the key in "Settings → Huobao Quick Setup" to write thr
 
 ## 📖 Overview
 
-Huobao Drama is an AI-powered short-drama production platform that automates the entire pipeline: script generation, character design, storyboard breakdown, and video compositing.
+Huobao Drama is an AI workbench for short-drama production. It organizes scripts, characters, scenes, props, storyboards, and generated media by project. AI agents assist with script rewriting, asset extraction, and storyboard breakdown; configured image and video services handle generation, including Muse video tasks.
+
+> **Current source version: 4.0.12 (Huobao customization based on upstream 4.0.11).** Improvements cover the Muse video workflow, storyboard and wardrobe-continuity prompt rules, script/media linking, and poster preview. A 4.0.12 installer has not been released; download links still point to the published upstream 4.0.11 build.
 
 ### 🎯 Core Value
 
-- **🤖 AI-Driven**: LLMs parse scripts and extract characters, scenes, and storyboard information
-- **🎨 Intelligent Creation**: AI image generation for character designs and scene backgrounds
-- **📹 Video Generation**: Text-to-video and image-to-video models automatically produce storyboard clips
-- **🔄 End-to-End Workflow**: A complete pipeline from idea to finished episode
+- **📝 Scripts & Storyboards**: AI-assisted script rewriting, creative asset extraction, and storyboard breakdown
+- **🎨 Creative Assets**: Manage characters, scenes, props, prompts, and reference media
+- **📹 Image & Video**: Generate images and storyboard clips through configured providers, including Muse video support
+- **🎞️ Episode Production**: Track generation, preview posters and media, and assemble and export episodes
 
 ### 🛠️ Architecture
 
@@ -133,7 +135,7 @@ No config files — everything is set via environment variables (all have defaul
 
 ```bash
 # Clone the repository
-git clone https://github.com/chatfire-AI/huobao-drama.git
+git clone https://github.com/yongshengdizi/huobao-drama.git
 cd huobao-drama
 
 # Install backend dependencies
