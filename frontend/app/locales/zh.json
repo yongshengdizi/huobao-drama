@@ -1,4 +1,5 @@
 {
+  "videoPromptMode": {"label": "提示词模式", "auto": "自动（跟随视频模型）", "muse": "Muse 短剧", "other": "其他模型", "help": "选择只影响视频提示词写法，不切换视频模型。", "museSkill": "Muse 六段式", "settings": "跟随全局设置", "settingsHelp": "自动模式按视频模型区分 Muse 和其他 API；MCP 读取相同规则。", "saved": "设置已保存", "engineHelp": "火宝独立引擎，账号与妙思 TV 独立管理。", "engineOpen": "打开账号管理"},
   "app": {
     "title": "火宝短剧",
     "updateAvailable": "发现新版本 v{version}，可在「设置 → 关于更新」中升级"

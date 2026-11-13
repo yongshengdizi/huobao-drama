@@ -1,3 +1,4 @@
+import { validEpisode, linkEpisode } from '../utils/episode-link.js'
 import { Hono } from 'hono'
 import { and, eq } from 'drizzle-orm'
 import { db, getInsertId, schema } from '../db/index.js'
@@ -16,6 +17,7 @@ const PROP_IMAGE_SIZE = '1024x1024'
 app.post('/', async (c) => {
   const body = await c.req.json()
   if (!body.drama_id) return badRequest(c, 'drama_id 必填')
+  if (body.episode_id !== undefined && !(await validEpisode(body.drama_id, body.episode_id))) return badRequest(c, 'episode_id 必须属于当前剧')
   if (!body.name?.trim()) return badRequest(c, '名称必填')
   const ts = now()
   const res = await db.insert(schema.props).values({
@@ -49,6 +51,12 @@ app.delete('/:id', async (c) => {
 app.put('/:id', async (c) => {
   const id = Number(c.req.param('id'))
   const body = await c.req.json()
+  if (body.episode_id !== undefined) {
+    const [entity] = await db.select().from(schema.props).where(eq(schema.props.id, id))
+    if (!entity || entity.deletedAt) return badRequest(c, '素材不存在')
+    if (!(await validEpisode(entity.dramaId, body.episode_id))) return badRequest(c, 'episode_id 必须属于当前剧')
+    await linkEpisode('prop', Number(body.episode_id), id)
+  }
   const updates: Record<string, any> = { updatedAt: now() }
   if (body.name !== undefined) updates.name = body.name
   if (body.type !== undefined) updates.type = body.type
@@ -116,7 +124,7 @@ app.post('/:id/generate-image', async (c) => {
   const prompt = finalPrompt || propImagePrompt(prop, stylePrompt)
   try {
     logTaskStart('PropImage', 'generate', { propId: id, episodeId: ep.id, dramaId: prop.dramaId })
-    const genId = await generateImage({ propId: id, dramaId: prop.dramaId, prompt, model: body.model, size: PROP_IMAGE_SIZE, configId: body.config_id ?? ep.imageConfigId ?? undefined })
+    const genId = await generateImage({ episodeId: ep.id, propId: id, dramaId: prop.dramaId, prompt, model: body.model, size: PROP_IMAGE_SIZE, configId: body.config_id ?? ep.imageConfigId ?? undefined })
     logTaskSuccess('PropImage', 'generate', { propId: id, generationId: genId })
     return success(c, { image_generation_id: genId })
   } catch (err: any) {

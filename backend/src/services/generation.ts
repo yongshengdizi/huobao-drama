@@ -35,6 +35,7 @@ const POLL_PROFILES: Record<TaskType, { attempts: number; intervalMs: number; ma
 }
 
 interface GenerateImageParams {
+  episodeId?: number
   storyboardId?: number
   dramaId?: number
   sceneId?: number
@@ -90,6 +91,7 @@ export async function generateImage(params: GenerateImageParams): Promise<number
     model: params.model || config.model,
   }, {
     size: params.size || '1920x1080',
+    episodeId: params.episodeId,
     frameType: params.frameType,
     referenceImages: params.referenceImages,
   })

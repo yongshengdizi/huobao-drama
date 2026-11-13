@@ -8,6 +8,7 @@ import { success, badRequest } from '../utils/response.js'
 import { skillsManagerWorkspace } from '../agents/skills.js'
 import { validAgentTypes, DEFAULT_PROMPTS } from '../agents/index.js'
 import { loadAgentPromptFile, serializePromptFile, promptFilePath } from '../agents/prompts.js'
+import { loadAgentSkills } from '../agents/skills.js'
 
 const app = new Hono()
 const fsm = () => skillsManagerWorkspace.filesystem!
@@ -31,6 +32,14 @@ app.get('/', async (c) => {
 })
 
 // GET /prompts/:type?lang= — 有效内容（语言变体优先，缺失回退基础版，再缺失回退代码默认）
+app.get('/:type/effective', async (c) => {
+  const type = c.req.param('type')
+  if (!checkType(type)) return badRequest(c, '未知的 Agent 类型')
+  const lang = normalizeLang(c.req.query('lang'))
+  const file = await loadAgentPromptFile(type, lang)
+  const skills = await loadAgentSkills(type, lang)
+  return success(c, { agent_type: type, lang, system_prompt: file?.instructions || DEFAULT_PROMPTS[type].instructions, skills })
+})
 // is_default=true 表示当前语言无独立文件（内容为回退版本），前端据此提示「跟随中文」
 app.get('/:type', async (c) => {
   const type = c.req.param('type')

@@ -23,7 +23,8 @@ import props from './routes/props.js'
 import settings from './routes/settings.js'
 import storage from './routes/storage.js'
 import serverUpdate from './routes/serverUpdate.js'
-import { requestLogger, errorHandler } from './middleware/logger.js'
+import { requestLogger } from './middleware/logger.js'
+import { HTTPException } from 'hono/http-exception'
 import { resumeInterruptedTasks } from './services/generation.js'
 import { DATA_ROOT } from './utils/paths.js'
 
@@ -38,7 +39,11 @@ app.use('*', cors({
   credentials: true,
 }))
 app.use('*', requestLogger)
-app.use('*', errorHandler)
+app.onError((err, c) => {
+  console.error(`[ERROR] ${c.req.method} ${c.req.path}`, err)
+  if (err instanceof HTTPException) return c.json({ code: err.status, message: err.message }, err.status)
+  return c.json({ code: 500, message: 'Internal Server Error' }, 500)
+})
 
 // Health check（version 供部署巡检/更新检查核对当前运行版本）
 app.get('/api/v1/health', (c) => c.json({
@@ -88,4 +93,4 @@ console.log(`🚀 Huobao Drama TS server on http://localhost:${port}`)
 
 await resumeInterruptedTasks()
 
-serve({ fetch: app.fetch, port })
+serve({ fetch: app.fetch, port, ...(process.env.HUOBAO_BIND_HOST ? { hostname: process.env.HUOBAO_BIND_HOST } : {}) })

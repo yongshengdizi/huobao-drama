@@ -20,7 +20,8 @@ export interface UsageBuckets {
   total: number
 }
 
-const DB_FILE_BASE = 'huobao.sqlite3'
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif', '.bmp', '.svg', '.heic', '.heif', '.tif', '.tiff'])
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi', '.flv', '.ts'])
 
 /** 递归 walk，对每个普通文件回调（完整路径 + 大小）；目录不可读/文件竞态静默跳过 */
 async function walkFiles(dir: string, onFile: (filePath: string, size: number) => void): Promise<void> {
@@ -59,9 +60,10 @@ export async function dirUsage(dataRoot: string, sqlitePath: string): Promise<Us
     } catch { /* 文件不存在（如未开 WAL 时 -wal 缺失）*/ }
   }
 
+  const dbRelative = path.relative(dataRoot, sqlitePath)
   await walkFiles(dataRoot, (filePath, size) => {
     const rel = path.relative(dataRoot, filePath)
-    if (rel === DB_FILE_BASE || rel.startsWith(DB_FILE_BASE + '-')) return // 已单独计入 db 桶
+    if (rel === dbRelative || rel === dbRelative + '-wal' || rel === dbRelative + '-shm') return // 已单独计入 db 桶
     const parts = rel.split(path.sep)
     if (parts[0] === 'static' && parts.length >= 2) {
       const sub = parts[1]
@@ -69,6 +71,17 @@ export async function dirUsage(dataRoot: string, sqlitePath: string): Promise<Us
         add(sub, size)
         return
       }
+    }
+    // 导入的 ArcReel 素材保留原目录结构，不在 static/images 等标准目录下。
+    // 其原图、视频和历史版本按真实文件类型计数，避免全部显示为“其他”。
+    const ext = path.extname(filePath).toLowerCase()
+    if (IMAGE_EXTENSIONS.has(ext)) {
+      add('images', size)
+      return
+    }
+    if (VIDEO_EXTENSIONS.has(ext)) {
+      add('videos', size)
+      return
     }
     add('other', size)
   })

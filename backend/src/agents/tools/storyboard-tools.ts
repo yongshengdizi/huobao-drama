@@ -386,6 +386,11 @@ const updateStoryboard = createTool({
     const ids = requireIds(context)
     if ('error' in ids) return ids
     const { episodeId, dramaId } = ids
+    if (context?.requestContext?.get('promptFieldsOnly' as never)) {
+      const unexpected = Object.keys(fields).filter(key => !['video_prompt', 'image_prompt'].includes(key))
+      if (unexpected.length) return { error: `提示词 Agent 只能更新 video_prompt 或 image_prompt；请移除: ${unexpected.join(', ')}` }
+      if (!('video_prompt' in fields) && !('image_prompt' in fields)) return { error: '请提供 video_prompt 或 image_prompt' }
+    }
     const [storyboard] = await db.select().from(schema.storyboards).where(eq(schema.storyboards.id, storyboard_id))
     if (!storyboard || storyboard.episodeId !== episodeId || storyboard.deletedAt) return { error: `Storyboard ${storyboard_id} not found in this episode` }
 

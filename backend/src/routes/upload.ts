@@ -24,7 +24,7 @@ app.post('/image', async (c) => {
 
 const VIDEO_EXT = new Set(['.mp4', '.mov', '.webm', '.m4v'])
 const VIDEO_MIME = new Set(['video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v'])
-const VIDEO_MAX = 50 * 1024 * 1024 // 50MB
+const VIDEO_MAX = 100 * 1024 * 1024 // 100MB
 
 function extOf(name: string): string {
   const i = name.lastIndexOf('.')

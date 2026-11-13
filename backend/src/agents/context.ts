@@ -10,6 +10,8 @@ export interface AgentRequestContextValues {
   dramaId: number
   modelOverride?: string
   textConfigId?: number
+  videoPromptMode?: 'muse' | 'muse_skill' | 'other'
+  promptFieldsOnly?: boolean
   /** AI 内容语言；缺省时读全局设置（app_settings.content_language） */
   language?: ContentLanguage
 }
@@ -20,6 +22,8 @@ export function buildAgentRequestContext(values: AgentRequestContextValues): Req
   rc.set('dramaId', values.dramaId)
   if (values.modelOverride) rc.set('modelOverride', values.modelOverride)
   if (values.textConfigId) rc.set('textConfigId', values.textConfigId)
+  if (values.videoPromptMode) rc.set('videoPromptMode', values.videoPromptMode)
+  if (values.promptFieldsOnly) rc.set('promptFieldsOnly', true)
   // 语言在构建处统一解析：4 条链路（chat/提取/图片提示词/视频提示词）都经过这里，
   // 全局设置一处生效；显式传入 values.language 可按请求覆盖
   rc.set('language', values.language ?? getContentLanguage())

@@ -1,3 +1,4 @@
+import { HTTPException } from 'hono/http-exception'
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, getInsertId, schema } from '../db/index.js'
@@ -62,17 +63,17 @@ async function validateStoryboardBindings(episodeId: number, sceneId: number | n
   const episodePropIds = new Set(propLinks.map(link => link.propId))
 
   if (sceneId != null && !episodeSceneIds.has(sceneId)) {
-    throw new Error('scene_id 必须来自当前集已关联场景')
+    throw new HTTPException(400, { message: 'scene_id 必须来自当前集已关联场景' })
   }
 
   const invalidCharacterIds = (characterIds || []).filter(id => !episodeCharacterIds.has(id))
   if (invalidCharacterIds.length) {
-    throw new Error('character_ids 必须来自当前集已关联角色')
+    throw new HTTPException(400, { message: 'character_ids 必须来自当前集已关联角色' })
   }
 
   const invalidPropIds = (propIds || []).filter(id => !episodePropIds.has(id))
   if (invalidPropIds.length) {
-    throw new Error('prop_ids 必须来自当前集已关联道具')
+    throw new HTTPException(400, { message: 'prop_ids 必须来自当前集已关联道具' })
   }
 }
 
@@ -134,7 +135,8 @@ app.put('/:id', async (c) => {
     image_prompt: 'imagePrompt', scene_id: 'sceneId', location: 'location',
     time: 'time', atmosphere: 'atmosphere', result: 'result',
     bgm_prompt: 'bgmPrompt', sound_effect: 'soundEffect',
-    video_url: 'videoUrl',
+    video_url: 'videoUrl', composed_image: 'composedImage',
+    first_frame_image: 'firstFrameImage', last_frame_image: 'lastFrameImage',
   }
 
   const updates: Record<string, any> = { updatedAt: now() }

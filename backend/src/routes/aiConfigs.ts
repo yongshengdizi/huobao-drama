@@ -61,7 +61,16 @@ function buildProbe(serviceType: string, provider: string, baseUrl: string, mode
     }
   }
 
-  if (p === 'openai') {
+  if (p === 'deepseek') {
+    return {
+      method: 'GET',
+      url: joinProviderUrl(baseUrl, '', '/models'),
+      headers: bearerHeaders(apiKey),
+      body: undefined,
+    }
+  }
+
+  if (p === 'openai' || p === 'muse2api') {
     return {
       method: 'GET',
       url: joinProviderUrl(baseUrl, '/v1', '/models'),

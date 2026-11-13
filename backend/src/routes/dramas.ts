@@ -86,9 +86,25 @@ app.get('/stats', async (c) => {
 })
 
 // GET /dramas/:id - Get drama detail
+app.get('/:id/poster-config', async (c) => {
+  const id = Number(c.req.param('id'))
+  const [project] = await db.select().from(schema.dramas).where(and(eq(schema.dramas.id, id), isNull(schema.dramas.deletedAt)))
+  if (!project) return notFound(c, '项目不存在')
+  const [setting] = await db.select().from(schema.appSettings).where(eq(schema.appSettings.key, `poster_prompt_${id}`))
+  return success(c, { prompt: setting?.value || '', thumbnail: project.thumbnail || '' })
+})
+app.put('/:id/poster-config', async (c) => {
+  const id = Number(c.req.param('id')); const body = await c.req.json().catch(() => null)
+  const [project] = await db.select().from(schema.dramas).where(and(eq(schema.dramas.id, id), isNull(schema.dramas.deletedAt)))
+  if (!project) return notFound(c, '项目不存在')
+  if (typeof body?.prompt !== 'string' || body.prompt.length > 10000) return badRequest(c, '海报提示词无效')
+  const key = `poster_prompt_${id}`; const updatedAt = now()
+  await db.insert(schema.appSettings).values({ key, value: body.prompt, updatedAt }).onConflictDoUpdate({ target: schema.appSettings.key, set: { value: body.prompt, updatedAt } })
+  return success(c, { prompt: body.prompt })
+})
 app.get('/:id', async (c) => {
   const id = Number(c.req.param('id'))
-  const [drama] = await db.select().from(schema.dramas).where(eq(schema.dramas.id, id))
+  const [drama] = await db.select().from(schema.dramas).where(and(eq(schema.dramas.id, id), isNull(schema.dramas.deletedAt)))
   if (!drama) return notFound(c, '剧本不存在')
 
   const eps = await db.select().from(schema.episodes)
@@ -100,10 +116,18 @@ app.get('/:id', async (c) => {
   const prps = await db.select().from(schema.props)
     .where(eq(schema.props.dramaId, id))
 
+  const episodeIds = new Set(eps.map(ep => ep.id))
+  const charLinks = (await db.select().from(schema.episodeCharacters)).filter(link => episodeIds.has(link.episodeId))
+  const sceneLinks = (await db.select().from(schema.episodeScenes)).filter(link => episodeIds.has(link.episodeId))
+  const propLinks = (await db.select().from(schema.episodeProps)).filter(link => episodeIds.has(link.episodeId))
   return success(c, {
     ...toSnakeCase(drama),
     tags: drama.tags ? JSON.parse(drama.tags) : [],
-    episodes: toSnakeCaseArray(eps),
+    episodes: toSnakeCaseArray(eps).map((ep: any) => ({ ...ep,
+      character_ids: charLinks.filter(link => link.episodeId === ep.id).map(link => link.characterId),
+      scene_ids: sceneLinks.filter(link => link.episodeId === ep.id).map(link => link.sceneId),
+      prop_ids: propLinks.filter(link => link.episodeId === ep.id).map(link => link.propId),
+    })),
     characters: toSnakeCaseArray(chars),
     scenes: toSnakeCaseArray(scns),
     props: toSnakeCaseArray(prps),
@@ -116,6 +140,7 @@ app.put('/:id', async (c) => {
   const body = await c.req.json()
   const updates: Record<string, any> = { updatedAt: now() }
   if (body.title !== undefined) updates.title = body.title
+  if (body.thumbnail !== undefined) updates.thumbnail = body.thumbnail
   if (body.description !== undefined) updates.description = body.description
   if (body.genre !== undefined) updates.genre = body.genre
   if (body.style !== undefined) updates.style = body.style
@@ -156,6 +181,7 @@ app.put('/:id/episodes', async (c) => {
   const dramaId = Number(c.req.param('id'))
   const body = await c.req.json()
   const episodes = body.episodes || []
+  if (episodes.some((ep: any) => ep.id && ('content' in ep || 'script_content' in ep || 'scriptContent' in ep))) return c.json({ error: 'revision_required', message: '更新剧本请使用带版本校验的分集接口' }, 409)
   const ts = now()
 
   for (const ep of episodes) {

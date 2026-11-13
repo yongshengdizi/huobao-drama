@@ -1,4 +1,5 @@
 {
+  "videoPromptMode": {"label": "プロンプト形式", "auto": "自動（動画モデルに従う）", "muse": "Muse 短編ドラマ", "other": "その他のモデル", "help": "動画モデルは変更せず、動画プロンプトの書式を切り替えます。", "museSkill": "Muse 構造化", "settings": "全体設定に従う", "settingsHelp": "自動は動画モデルに基づき、MCP も同じ設定を読みます。", "saved": "設定を保存しました", "engineHelp": "火宝のエンジンとアカウント設定は独立しています。", "engineOpen": "アカウント管理を開く"},
   "app": {
     "title": "火宝ショートドラマ",
     "updateAvailable": "新バージョン v{version} があります。「設定 → 更新について」でアップグレードできます"

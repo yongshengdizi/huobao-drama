@@ -12,6 +12,11 @@
         <span class="tag tag-accent">{{ t('index.hero.styleCount', { n: stylePresets.length }) }}</span>
       </div>
       <div class="head-actions">
+        <button class="btn btn-icon" type="button" :title="loading ? '正在刷新' : '立即刷新当前页面数据'" :aria-label="loading ? '正在刷新' : '立即刷新当前页面数据'" :disabled="loading" @click="load">
+          <svg :class="{ 'is-spinning': loading }" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 7v5h-5"/><path d="M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 17.5 6.5L20 12M4 12l2.5 5.5A7 7 0 0 0 18.4 15"/>
+          </svg>
+        </button>
         <button class="btn btn-icon tour-help-btn" :title="t('tour.helpTitle')" @click="startTour('index', INDEX_TOUR, t)">
           <CircleHelp :size="15" :stroke-width="1.8" />
         </button>
@@ -74,7 +79,8 @@
         @keydown.space.prevent="openDrama(d)"
       >
         <div class="project-cover">
-          <span class="cover-initial">{{ coverInitial(d) }}</span>
+          <img v-if="d.thumbnail" :src="posterUrl(d.thumbnail)" :alt="d.title + ' 海报'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" @click.stop="openPoster(d)" @keydown.enter.stop.prevent="openPoster(d)" tabindex="0" role="button" :aria-label="d.title + ' 海报，点击放大预览'" />
+          <span v-else class="cover-initial">{{ coverInitial(d) }}</span>
           <span v-if="d.aspect_ratio && d.aspect_ratio !== 'adaptive'" class="cover-ratio">{{ d.aspect_ratio }}</span>
           <div class="status-wrap" @click.stop>
             <AppMenu
@@ -112,6 +118,8 @@
                 </button>
               </template>
               <AppMenuItem @click="activeMenuId = null; openDrama(d)">{{ t('index.openProject') }}</AppMenuItem>
+              <AppMenuItem @click="activeMenuId = null; choosePoster(d)">上传项目海报</AppMenuItem>
+              <AppMenuItem @click="activeMenuId = null; configurePoster(d)">海报生成提示词</AppMenuItem>
               <AppMenuItem danger @click="activeMenuId = null; dramaToDelete = d">{{ t('index.deleteProject') }}</AppMenuItem>
             </AppMenu>
           </div>
@@ -128,6 +136,12 @@
           </div>
         </div>
       </article>
+    </div>
+
+    <div v-if="previewPoster" class="poster-preview-overlay" role="dialog" aria-modal="true" :aria-label="previewPoster.title + ' 海报预览'" @click.self="closePoster" @keydown.esc="closePoster" tabindex="-1" ref="posterPreviewEl">
+      <button class="poster-preview-close" type="button" aria-label="关闭海报预览" @click="closePoster">×</button>
+      <img class="poster-preview-image" :src="posterUrl(previewPoster.thumbnail)" :alt="previewPoster.title + ' 海报大图'" />
+      <span class="poster-preview-hint">{{ previewPoster.title }} · 点击空白处或按 Esc 关闭</span>
     </div>
 
     <div v-else class="empty-state">
@@ -202,13 +216,26 @@ import { toast } from 'vue-sonner'
 import { toastError } from '~/composables/useToast'
 import { useI18n } from 'vue-i18n'
 import { Clock, CircleHelp } from 'lucide-vue-next'
-import { dramaAPI, stylePresetAPI } from '~/composables/useApi'
+import { dramaAPI, stylePresetAPI, uploadAPI } from '~/composables/useApi'
 import BaseSelect from '~/components/BaseSelect.vue'
 import { startTour, autoTour } from '~/composables/useTour'
 
 const { t, locale } = useI18n()
 
 const dramas = ref([])
+const previewPoster = ref(null)
+function posterUrl(path) { return path.startsWith('http') || path.startsWith('/') ? path : '/' + path }
+const posterPreviewEl = ref(null)
+function openPoster(drama) { previewPoster.value = drama; nextTick(() => posterPreviewEl.value?.focus()) }
+function closePoster() { previewPoster.value = null }
+function choosePoster(d) {
+  const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/png,image/jpeg,image/webp'
+  input.onchange = async () => { const file = input.files?.[0]; if (!file) return; try { const uploaded = await uploadAPI.image(file); await dramaAPI.update(d.id, { thumbnail: uploaded.path }); d.thumbnail = uploaded.path; toast.success('海报已保存') } catch (e) { toastError(e) } }
+  input.click()
+}
+async function configurePoster(d) {
+  try { const response = await fetch(`/api/v1/dramas/${d.id}/poster-config`); const data = await response.json(); if (!response.ok) throw new Error('读取失败'); const prompt = window.prompt('填写海报生成提示词，智能体可读取并生成后上传', data.data?.prompt || ''); if (prompt === null) return; const saved = await fetch(`/api/v1/dramas/${d.id}/poster-config`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt }) }); if (!saved.ok) throw new Error('保存失败'); toast.success('海报提示词已保存') } catch (e) { toastError(e) }
+}
 const loading = ref(false)
 const showCreate = ref(false)
 const searchKeyword = ref('')
@@ -373,6 +400,48 @@ const INDEX_TOUR = [
 ]
 onMounted(() => setTimeout(() => autoTour('index', INDEX_TOUR, t), 600))
 </script>
+
+<style scoped>
+.poster-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 56px 24px 28px;
+  background: rgb(0 0 0 / 88%);
+  backdrop-filter: blur(8px);
+}
+.poster-preview-image {
+  display: block;
+  max-width: min(92vw, 900px);
+  max-height: calc(100vh - 112px);
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 20px 80px rgb(0 0 0 / 45%);
+}
+.poster-preview-close {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(255 255 255 / 10%);
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+}
+.poster-preview-hint { color: rgb(255 255 255 / 76%); font-size: 13px; }
+.project-cover img[role="button"] { cursor: zoom-in; }
+.is-spinning { animation: refresh-spin 0.8s linear infinite; }
+@keyframes refresh-spin { to { transform: rotate(360deg); } }
+</style>
 
 <style scoped>
 .page {

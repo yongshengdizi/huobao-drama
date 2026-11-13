@@ -1,3 +1,4 @@
+import { validEpisode, linkEpisode } from '../utils/episode-link.js'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { and, eq, isNull } from 'drizzle-orm'
@@ -60,6 +61,7 @@ app.delete('/:id/voice', async c => {
 app.post('/', async (c) => {
   const body = await c.req.json()
   if (!body.drama_id) return badRequest(c, 'drama_id 必填')
+  if (body.episode_id !== undefined && !(await validEpisode(body.drama_id, body.episode_id))) return badRequest(c, 'episode_id 必须属于当前剧')
   if (!body.name?.trim()) return badRequest(c, '名称必填')
   const ts = now()
   const res = await db.insert(schema.characters).values({
@@ -102,6 +104,12 @@ function characterImagePrompt(char: typeof schema.characters.$inferSelect, style
 app.put('/:id', async (c) => {
   const id = Number(c.req.param('id'))
   const body = await c.req.json()
+  if (body.episode_id !== undefined) {
+    const [entity] = await db.select().from(schema.characters).where(eq(schema.characters.id, id))
+    if (!entity || entity.deletedAt) return badRequest(c, '素材不存在')
+    if (!(await validEpisode(entity.dramaId, body.episode_id))) return badRequest(c, 'episode_id 必须属于当前剧')
+    await linkEpisode('character', Number(body.episode_id), id)
+  }
   const updates: Record<string, any> = { updatedAt: now() }
   for (const key of ['name', 'role', 'description', 'appearance', 'styling', 'imageUrl', 'localPath']) {
     const snakeKey = key.replace(/[A-Z]/g, m => '_' + m.toLowerCase())
@@ -138,7 +146,7 @@ app.post('/:id/generate-image', async (c) => {
   const prompt = finalPrompt || characterImagePrompt(char, stylePrompt)
   try {
     logTaskStart('CharacterImage', 'generate', { characterId: id, episodeId: ep.id, dramaId: char.dramaId })
-    const genId = await generateImage({ characterId: id, dramaId: char.dramaId, prompt, model: body.model, size: CHARACTER_IMAGE_SIZE, configId: body.config_id ?? ep.imageConfigId ?? undefined })
+    const genId = await generateImage({ episodeId: ep.id, characterId: id, dramaId: char.dramaId, prompt, model: body.model, size: CHARACTER_IMAGE_SIZE, configId: body.config_id ?? ep.imageConfigId ?? undefined })
     logTaskSuccess('CharacterImage', 'generate', { characterId: id, generationId: genId })
     return success(c, { image_generation_id: genId })
   } catch (err: any) {

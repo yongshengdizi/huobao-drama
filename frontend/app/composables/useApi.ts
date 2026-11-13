@@ -5,7 +5,7 @@ async function req<T = any>(method: string, path: string, body?: any): Promise<T
   if (body) opts.body = JSON.stringify(body)
 
   const start = performance.now()
-  console.log(`%c[API] %c${method} %c${path}`, 'color:#888', 'color:#4fc3f7;font-weight:bold', 'color:#ccc', body || '')
+  console.log(`%c[API] %c${method} %c${path}`, 'color:#888', 'color:#4fc3f7;font-weight:bold', 'color:#ccc', path.startsWith('/ai-configs') || path.includes('/token') ? '[redacted]' : (body || ''))
 
   try {
     const resp = await fetch(`${BASE}${path}`, opts)
@@ -54,7 +54,7 @@ export const episodeAPI = {
   pipelineStatus: (id: number) => api.get(`/episodes/${id}/pipeline-status`),
   extract: (id: number, target: string, model?: string, configId?: number) => api.post(`/episodes/${id}/extract`, { target, model: model || undefined, config_id: configId || undefined }),
   extractStatus: (id: number) => api.get(`/episodes/${id}/extract-status`),
-  generateVideoPrompts: (id: number, model?: string, configId?: number, storyboardIds?: number[]) => api.post(`/episodes/${id}/generate-video-prompts`, { model: model || undefined, config_id: configId || undefined, storyboard_ids: storyboardIds?.length ? storyboardIds : undefined }),
+  generateVideoPrompts: (id: number, model?: string, configId?: number, storyboardIds?: number[], videoPromptMode?: 'muse' | 'muse_skill' | 'other') => api.post(`/episodes/${id}/generate-video-prompts`, { model: model || undefined, config_id: configId || undefined, video_prompt_mode: videoPromptMode, storyboard_ids: storyboardIds?.length ? storyboardIds : undefined }),
   videoPromptsStatus: (id: number) => api.get(`/episodes/${id}/video-prompts-status`),
 }
 

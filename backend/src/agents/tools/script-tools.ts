@@ -3,9 +3,10 @@
  * 模块级单例 — episodeId 通过 RequestContext 按请求注入
  */
 import { createTool } from '@mastra/core/tools'
+import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { db, schema } from '../../db/index.js'
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { now } from '../../utils/response.js'
 import { getEpisodeId } from '../context.js'
 
@@ -21,7 +22,7 @@ const readEpisodeScript = createTool({
     if (!ep) return { error: `Episode not found (id=${episodeId})` }
     const content = ep.content || ep.scriptContent
     if (!content) return { error: `Episode has no content (id=${episodeId})` }
-    return { content, word_count: content.length, episode_id: episodeId }
+    return { content, revision: createHash('sha256').update(ep.scriptContent || ep.content || '').digest('hex'), word_count: content.length, episode_id: episodeId }
   },
 })
 
@@ -42,6 +43,7 @@ const rewriteToScreenplay = createTool({
 
     return {
       source_content: source,
+      revision: createHash('sha256').update(ep.scriptContent || ep.content || '').digest('hex'),
       instruction: `请将以下内容改写为格式化剧本。
 
 格式规范：
@@ -63,13 +65,19 @@ const saveScript = createTool({
   description: 'Save the rewritten screenplay content to the current episode.',
   inputSchema: z.object({
     content: z.string().describe('The formatted screenplay content to save'),
+    expected_revision: z.string().describe('Revision returned by read_episode_script or rewrite_to_screenplay'),
   }),
-  execute: async ({ content }, context) => {
+  execute: async ({ content, expected_revision }, context) => {
     const episodeId = getEpisodeId(context?.requestContext)
     if (!episodeId) return { error: 'Missing episodeId in request context' }
-    await db.update(schema.episodes)
+    const [ep] = await db.select().from(schema.episodes).where(eq(schema.episodes.id, episodeId))
+    if (!ep) return { error: 'Episode not found' }
+    if (createHash('sha256').update(ep.scriptContent || ep.content || '').digest('hex') !== expected_revision) return { error: 'revision_conflict', message: '剧本已被修改，请重新读取后再保存' }
+    const changed = await db.update(schema.episodes)
       .set({ scriptContent: content, updatedAt: now() })
-      .where(eq(schema.episodes.id, episodeId))
+      .where(and(eq(schema.episodes.id, episodeId), ep.scriptContent == null ? isNull(schema.episodes.scriptContent) : eq(schema.episodes.scriptContent, ep.scriptContent), ep.content == null ? isNull(schema.episodes.content) : eq(schema.episodes.content, ep.content)))
+      .returning({ id: schema.episodes.id })
+    if (!changed.length) return { error: 'revision_conflict', message: '剧本已被修改，请重新读取后再保存' }
 
     return { message: `Script saved`, word_count: content.length }
   },

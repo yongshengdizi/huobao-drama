@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { createHash } from 'node:crypto'
 import { and, eq, isNull } from 'drizzle-orm'
 import { db, getInsertId, schema } from '../db/index.js'
 import { success, notFound, badRequest, now } from '../utils/response.js'
@@ -8,6 +9,26 @@ import { EXTRACT_TARGETS, getExtractionStatus, startExtraction, type ExtractTarg
 import { getVideoPromptBatchStatus, startVideoPromptBatch } from '../services/video-prompts.js'
 
 const app = new Hono()
+
+// Atomic optimistic write: the original values are part of the SQL predicate,
+// so concurrent web or MCP updates cannot silently overwrite this request.
+app.put('/:id/canonical-script', async (c) => {
+  const id = Number(c.req.param('id'))
+  const body = await c.req.json().catch(() => null)
+  if (typeof body?.script_content !== 'string' || !/^[a-f0-9]{64}$/.test(body?.expected_revision || '')) return badRequest(c, '需要 script_content 和 expected_revision')
+  const [ep] = await db.select().from(schema.episodes).where(and(eq(schema.episodes.id, id), isNull(schema.episodes.deletedAt)))
+  if (!ep) return notFound(c, '分集不存在')
+  const current = ep.scriptContent || ep.content || ''
+  const revision = createHash('sha256').update(current, 'utf8').digest('hex')
+  if (revision !== body.expected_revision) return c.json({ error: 'revision_conflict', current_revision: revision }, 409)
+  const condition = and(eq(schema.episodes.id, id), isNull(schema.episodes.deletedAt),
+    ep.scriptContent == null ? isNull(schema.episodes.scriptContent) : eq(schema.episodes.scriptContent, ep.scriptContent),
+    ep.content == null ? isNull(schema.episodes.content) : eq(schema.episodes.content, ep.content))
+  const updated = await db.update(schema.episodes).set({ scriptContent: body.script_content, updatedAt: now() }).where(condition).returning({ id: schema.episodes.id })
+  if (!updated.length) return c.json({ error: 'revision_conflict' }, 409)
+  const nextCanonical = body.script_content || ep.content || ''
+  return success(c, { episode_id: id, revision: createHash('sha256').update(nextCanonical, 'utf8').digest('hex') })
+})
 
 // POST /episodes — Create a new episode
 app.post('/', async (c) => {
@@ -57,6 +78,9 @@ app.put('/:id', async (c) => {
   const body = await c.req.json()
 
   const allowed = ['content', 'script_content', 'title', 'description', 'status', 'resolution']
+  if ('content' in body || 'script_content' in body) {
+    if (!body.expected_snapshot || typeof body.expected_snapshot !== 'object' || !('content' in body.expected_snapshot) || !('script_content' in body.expected_snapshot)) return c.json({ error: 'revision_required', message: '请重新读取剧本后再保存' }, 409)
+  }
   const updates: Record<string, any> = {}
   for (const key of allowed) {
     if (key in body) updates[key] = body[key]
@@ -75,7 +99,13 @@ app.put('/:id', async (c) => {
   if ('status' in updates) drizzleUpdates.status = updates.status
   if ('resolution' in updates) drizzleUpdates.resolution = updates.resolution
 
-  await db.update(schema.episodes).set(drizzleUpdates).where(eq(schema.episodes.id, id))
+  let condition = eq(schema.episodes.id, id)
+  if ('content' in updates || 'script_content' in updates) {
+    const s = body.expected_snapshot
+    condition = and(eq(schema.episodes.id, id), isNull(schema.episodes.deletedAt), s.content == null ? isNull(schema.episodes.content) : eq(schema.episodes.content, s.content), s.script_content == null ? isNull(schema.episodes.scriptContent) : eq(schema.episodes.scriptContent, s.script_content))!
+  }
+  const changed = await db.update(schema.episodes).set(drizzleUpdates).where(condition).returning({ id: schema.episodes.id })
+  if (!changed.length) return c.json({ error: 'revision_conflict', message: '剧本已被修改，请重新读取后再保存' }, 409)
   return success(c)
 })
 
@@ -149,10 +179,11 @@ app.post('/:id/generate-video-prompts', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const [ep] = await db.select().from(schema.episodes).where(eq(schema.episodes.id, id))
   if (!ep) return notFound(c, '剧集不存在')
+  if (body.video_prompt_mode != null && !['muse', 'muse_skill', 'other'].includes(body.video_prompt_mode)) return badRequest(c, '无效的视频提示词模式')
   const storyboardIds = Array.isArray(body.storyboard_ids)
     ? body.storyboard_ids.map(Number).filter((n: number) => Number.isInteger(n) && n > 0)
     : undefined
-  const result = await startVideoPromptBatch(ep.id, ep.dramaId, { model: body.model || undefined, configId: body.config_id ?? undefined }, storyboardIds)
+  const result = await startVideoPromptBatch(ep.id, ep.dramaId, { model: body.model || undefined, configId: body.config_id ?? undefined, videoPromptMode: body.video_prompt_mode || undefined }, storyboardIds)
   if (result.total === -1) return success(c, { status: 'running', already_running: true })
   if (!result.started) return success(c, { status: 'idle', total: 0 })
   return success(c, { status: 'running', total: result.total })

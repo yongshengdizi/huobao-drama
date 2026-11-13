@@ -1,4 +1,7 @@
 import type { MiddlewareHandler } from 'hono'
+import { appendFile } from 'node:fs/promises'
+import path from 'node:path'
+import { DATA_ROOT } from '../utils/paths.js'
 
 const colors = {
   reset: '\x1b[0m',
@@ -34,7 +37,8 @@ export const requestLogger: MiddlewareHandler = async (c, next) => {
   let bodyInfo = ''
   // 上传文件不克隆/读取请求体：避免记录音频内容，也让路由的大小限制先执行。
   const isFileUpload = c.req.header('content-type')?.toLowerCase().startsWith('multipart/form-data')
-  if (!isFileUpload && ['POST', 'PUT', 'PATCH'].includes(method)) {
+  const containsCredential = path === '/api/v1/settings/muse-connector/token' || path.startsWith('/api/v1/ai-configs')
+  if (!isFileUpload && !containsCredential && ['POST', 'PUT', 'PATCH'].includes(method)) {
     try {
       const clone = c.req.raw.clone()
       const text = await clone.text()
@@ -51,9 +55,14 @@ export const requestLogger: MiddlewareHandler = async (c, next) => {
 
   const ms = (performance.now() - start).toFixed(0)
   const status = c.res.status
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && /^\/api\/v1\/(dramas|episodes|storyboards|characters|scenes|props|upload)(\/|$)/.test(path)) {
+    void appendFile(pathModule(), JSON.stringify({ time: new Date().toISOString(), source: 'platform', method, path, status, duration_ms: Number(ms) }) + '\n').catch(() => {})
+  }
   const sc = statusColor(status)
   console.log(`${colors.dim}${time}${colors.reset} ${colors.cyan}${method}${colors.reset} ${path} ${sc}${status}${colors.reset} ${colors.dim}${ms}ms${colors.reset}`)
 }
+
+function pathModule() { return path.join(DATA_ROOT, 'project-activity.jsonl') }
 
 /**
  * 全局错误处理 — 捕获未处理异常，打印完整堆栈

@@ -1,4 +1,5 @@
 {
+  "videoPromptMode": {"label": "Prompt mode", "auto": "Auto (video model)", "muse": "Muse short drama", "other": "Other models", "help": "Changes video prompt guidance, not the video model.", "museSkill": "Muse structured", "settings": "Use global setting", "settingsHelp": "Auto selects guidance based on the video model; MCP reads the same setting.", "saved": "Setting saved", "engineHelp": "Huobao uses its own engine and account settings.", "engineOpen": "Open account manager"},
   "app": {
     "title": "Huobao Shorts",
     "updateAvailable": "New version v{version} is available. Upgrade in Settings → About."

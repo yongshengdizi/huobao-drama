@@ -20,6 +20,16 @@
             <p class="settings-desc">{{ t('settings.general.desc') }}</p>
           </div>
           <section class="card svc-group">
+            <div class="svc-group-head"><div class="svc-group-heading"><span class="svc-group-title">{{ t('videoPromptMode.label') }}</span><div class="svc-group-sub">{{ t('videoPromptMode.settingsHelp') }}</div></div></div>
+            <div class="config-row"><select class="input" :value="promptProfile" @change="setPromptProfile($event.target.value)">
+              <option value="auto">{{ t('videoPromptMode.auto') }}</option><option value="muse">{{ t('videoPromptMode.muse') }}</option><option value="other">{{ t('videoPromptMode.other') }}</option>
+            </select></div>
+          </section>
+          <section class="card svc-group">
+            <div class="svc-group-head"><div class="svc-group-heading"><span class="svc-group-title">智能体活动监控</span><div class="svc-group-sub">最近 100 条连接器请求；不记录令牌或请求内容。</div></div><button class="btn btn-sm" @click="loadAgentActivity">刷新</button></div>
+            <div class="dialog-body config-dialog-body"><p v-if="!agentActivity.length">暂无记录</p><div v-for="(entry, i) in agentActivity" :key="i" class="config-row">{{ entry.time }} · {{ entry.tool || entry.rpc_method || entry.method }} · {{ entry.status }} · {{ entry.duration_ms }} ms</div></div>
+          </section>
+          <section class="card svc-group">
             <div class="svc-group-head">
               <div class="svc-group-heading">
                 <span class="svc-group-title">{{ t('settings.general.contentLanguage') }}</span>
@@ -70,6 +80,38 @@
               </div>
             </div>
           </section>
+
+          <section class="card svc-group">
+            <div class="svc-group-head">
+              <div class="svc-group-heading">
+                <span class="svc-group-title">OTP 验证设备</span>
+                <div class="svc-group-sub">换绑后旧设备的登录凭证会失效。</div>
+              </div>
+              <span :class="['tag', otpStatus?.bound ? 'tag-success' : 'tag-error']">{{ otpStatus?.bound ? '已绑定' : '未绑定' }}</span>
+            </div>
+            <div v-if="otpStatus?.bound && otpStatus?.authenticated" class="dialog-body config-dialog-body">
+              <label class="field"><span class="field-label">当前验证器的 6 位动态码</span>
+                <input v-model="otpCurrentCode" class="input mono" inputmode="numeric" maxlength="6" autocomplete="one-time-code" />
+              </label>
+              <button v-if="!otpQrSvg" type="button" class="btn btn-sm" :disabled="otpSaving" @click="startOtpRebind">生成新设备绑定二维码</button>
+              <template v-else>
+                <div class="otp-qr" v-html="otpQrSvg"></div>
+                <div class="field-hint">用新设备扫码，或手动输入密钥：<code>{{ otpManualSecret }}</code></div>
+                <label class="field"><span class="field-label">新验证器的 6 位动态码</span>
+                  <input v-model="otpNewCode" class="input mono" inputmode="numeric" maxlength="6" autocomplete="one-time-code" />
+                </label>
+                <div class="model-add-row">
+                  <button type="button" class="btn btn-primary btn-sm" :disabled="otpSaving" @click="confirmOtpRebind">确认换绑</button>
+                  <button type="button" class="btn btn-sm" @click="cancelOtpRebind">取消</button>
+                </div>
+              </template>
+              <div v-if="otpError" class="field-hint otp-error">{{ otpError }}</div>
+            </div>
+            <div v-else class="dialog-body config-dialog-body">
+              <div class="field-hint">{{ otpStatus?.bound ? '请先完成 OTP 登录。' : '请先完成首次扫码绑定。' }}</div>
+              <a class="btn btn-sm" href="/auth">前往 OTP 验证页面</a>
+            </div>
+          </section>
         </div>
 
         <!-- ===== AI 服务配置 ===== -->
@@ -78,52 +120,9 @@
             <h2 class="settings-title">{{ t('settings.ai.title') }}</h2>
             <p class="settings-desc">{{ t('settings.ai.desc') }}</p>
           </div>
-          <section class="card quick-card">
-            <div class="quick-card-head">
-              <div class="setup-title">{{ t('settings.ai.quickTitle') }}</div>
-              <span class="tag tag-accent">{{ t('settings.ai.recommended') }}</span>
-            </div>
-            <p class="setup-desc">
-              {{ t('settings.ai.quickDesc') }}
-              <a class="huobao-site-link" :href="huobaoSiteUrl" target="_blank" rel="noopener noreferrer">
-                {{ t('settings.ai.getKey') }}
-                <ExternalLink :size="12" :stroke-width="1.8" />
-              </a>
-            </p>
-            <div class="huobao-quick-row">
-              <input v-model="huobaoApiKey" class="input" type="password" placeholder="Huobao API Key" />
-              <div class="lang-picker">
-                <button
-                  type="button"
-                  :class="['lang-option', { on: huobaoRegion === 'cn' }]"
-                  @click="huobaoRegion = 'cn'"
-                >{{ t('settings.ai.regionCn') }}</button>
-                <button
-                  type="button"
-                  :class="['lang-option', { on: huobaoRegion === 'com' }]"
-                  @click="huobaoRegion = 'com'"
-                >{{ t('settings.ai.regionCom') }}</button>
-              </div>
-              <button class="btn btn-primary" :disabled="huobaoSaving" @click="applyHuobaoQuickConfig">
-                <Loader2 v-if="huobaoSaving" :size="13" class="animate-spin" />
-                <Sparkles v-else :size="13" />
-                {{ t('settings.ai.applyQuick') }}
-              </button>
-            </div>
-            <div class="huobao-quick-models">
-              <div v-for="q in huobaoQuickConfigs" :key="q.name" class="hqm-row">
-                <span class="hqm-label">{{ serviceMeta[q.service_type].label }}</span>
-                <span class="hqm-provider">
-                  <img v-if="providerIconUrl(q.provider)" :src="providerIconUrl(q.provider)" class="hqm-provider-icon" alt="" />
-                  {{ q.provider }}
-                </span>
-                <span class="hqm-models mono">
-                  <span v-for="(m, i) in q.model" :key="m" :class="['hqm-model', { 'is-default': i === 0 }]">
-                    {{ m }}<em v-if="i === 0">{{ t('common.default') }}</em>
-                  </span>
-                </span>
-              </div>
-            </div>
+          <section class="card svc-group">
+            <div class="svc-group-head"><div class="svc-group-heading"><span class="svc-group-title">Muse2API</span><div class="svc-group-sub">{{ t('videoPromptMode.engineHelp') }}</div></div><a class="btn btn-sm" href="http://127.0.0.1:18611/" target="_blank" rel="noopener noreferrer">{{ t('videoPromptMode.engineOpen') }}</a></div>
+            <div class="config-row"><span>访问密钥</span><input class="input" readonly :type="showLocalMuseKey ? 'text' : 'password'" :value="localMuseKey" /><button class="btn btn-sm" @click="showLocalMuseKey = !showLocalMuseKey">{{ showLocalMuseKey ? '隐藏' : '显示' }}</button><button class="btn btn-sm" :disabled="!localMuseKey" @click="copyLocalMuseKey">复制</button></div><p class="config-empty">此密钥用于登录火宝的 Muse2API 管理页；Muse 账号通过 Cookie 导入。</p>
           </section>
           <section class="card setup-panel">
             <div class="setup-panel-head compact">
@@ -188,6 +187,45 @@
               <p v-if="!byType(st.type).length" class="config-empty">{{ t('settings.common.empty') }}</p>
             </section>
           </div>
+          <section class="card svc-group">
+            <div class="svc-group-head">
+              <div class="svc-group-heading">
+                <span class="svc-group-title">Muse MCP 接入</span>
+                <div class="svc-group-sub">连接器令牌保存在 NAS 数据卷中，重启和重建后保持不变。</div>
+              </div>
+              <span :class="['tag', museStatus?.token_configured ? 'tag-success' : 'tag-error']">
+                {{ museStatus?.token_configured ? '已配置' : '未配置或不可达' }}
+              </span>
+            </div>
+            <div class="dialog-body config-dialog-body">
+              <label class="field"><span class="field-label">MCP API 地址</span>
+                <input class="input mono" :value="museStatus?.mcp_url || 'https://hb-mcp.aynas.de5.net/mcp'" readonly />
+              </label>
+              <label class="field"><span class="field-label">当前生效令牌</span>
+                <input v-model="museCurrentToken" class="input mono" :type="showMuseCurrentToken ? 'text' : 'password'" autocomplete="off" spellcheck="false" placeholder="首次配置时请输入初始令牌" />
+              </label>
+              <div class="model-add-row">
+                <button type="button" class="btn btn-sm" @click="showMuseCurrentToken = !showMuseCurrentToken">{{ showMuseCurrentToken ? '隐藏当前令牌' : '显示当前令牌' }}</button>
+                <button type="button" class="btn btn-sm" :disabled="!museCurrentToken" @click="copyMuseToken">复制当前令牌</button>
+              </div>
+              <label class="field"><span class="field-label">MCP 客户端 JSON 配置</span>
+                <textarea class="input mono" rows="8" :value="museClientConfig(false)" readonly spellcheck="false"></textarea>
+              </label>
+              <div class="model-add-row">
+                <button type="button" class="btn btn-sm" :disabled="!museCurrentToken || !museStatus?.mcp_url" @click="copyMuseClientConfig">复制完整 JSON 配置</button>
+              </div>
+              <span class="field-hint">预览中的令牌已隐藏；复制的配置包含当前令牌，请妥善保管。客户端需支持 Streamable HTTP 和自定义请求头。</span>
+              <label class="field"><span class="field-label">新令牌</span>
+                <input v-model="museNewToken" class="input mono" :type="showMuseToken ? 'text' : 'password'" autocomplete="off" spellcheck="false" placeholder="至少 24 位，可自定义或随机生成" />
+              </label>
+              <div class="model-add-row">
+                <button type="button" class="btn btn-sm" @click="generateMuseToken">随机生成</button>
+                <button type="button" class="btn btn-sm" @click="showMuseToken = !showMuseToken">{{ showMuseToken ? '隐藏令牌' : '显示令牌' }}</button>
+                <button type="button" class="btn btn-primary btn-sm" :disabled="museSaving" @click="saveMuseToken">保存令牌</button>
+              </div>
+              <span class="field-hint">只有点击“保存令牌”才会更换令牌；保存后 Muse BOT 需要同步新值。刷新页面可再次查看当前生效值。</span>
+            </div>
+          </section>
         </div>
 
         <!-- ===== 风格预设 ===== -->
@@ -270,7 +308,22 @@
               </div>
             </div>
             <p class="config-empty">{{ t('settings.storage.note') }}</p>
-            <p v-if="!isDesktopMode" class="config-empty">{{ t('settings.storage.serverNote') }}</p>
+            <p v-if="storageInfo?.localMigrationError" class="config-empty">迁移未完成，仍使用原目录：{{ storageInfo.localMigrationError }}</p>
+            <div v-if="!isDesktopMode" class="config-row"><input v-model="localStorageTarget" class="input mono" placeholder="例如 D:\HuobaoData（可选择已有文件夹）" /><button class="btn btn-sm" :disabled="!localStorageTarget.trim()" @click="scheduleLocalStorage">更改存储位置</button></div>
+            <p v-if="!isDesktopMode" class="config-empty">输入新的完整文件夹路径。停止火宝并重新启动后，会复制并校验项目、素材与 MCP 数据；原目录保留。目标中如有同名文件将中止迁移，不会覆盖。Muse2API 引擎及其媒体缓存仍在程序目录。</p>
+          </section>
+          <section v-if="storageInfo?.mode === 'server'" class="card svc-group">
+            <div class="svc-group-head">
+              <div class="svc-group-heading">
+                <span class="svc-group-title">手动导出剧本与素材</span>
+                <div class="svc-group-sub">下载全部项目的分集剧本、分镜、人物、场景、道具记录与本机素材。</div>
+              </div>
+            </div>
+            <div class="dialog-body config-dialog-body">
+              <select v-model="exportProject" class="input"><option value="">全部项目</option><option v-for="p in exportProjects" :key="p.id" :value="String(p.id)">{{ p.title }}</option></select>
+              <a class="btn btn-primary btn-sm" :href="'/api/v1/storage/export' + (exportProject ? '?project_id=' + encodeURIComponent(exportProject) : '')">下载归档（tar.gz）</a>
+              <span class="field-hint">归档不包含模型 API Key、Muse 令牌和完整数据库；外部素材网址只保留引用。</span>
+            </div>
           </section>
         </div>
 
@@ -497,10 +550,10 @@
           <div class="preset-picker">
             <button
               v-for="preset in presetsByType(cfgForm.service_type)"
-              :key="`${cfgForm.service_type}-${preset.provider}`"
+              :key="`${cfgForm.service_type}-${preset.key}`"
               type="button"
               class="preset-pill"
-              @click="applyProviderPreset(cfgForm.service_type, preset.provider)"
+              @click="applyProviderPreset(cfgForm.service_type, preset.key)"
             >
               {{ preset.label }}
             </button>
@@ -511,13 +564,14 @@
           </label>
           <label class="field"><span class="field-label">{{ t('settings.cfg.provider') }}</span>
             <BaseSelect v-model="cfgForm.provider" :options="providerSelectOptions" :placeholder="t('settings.cfg.providerPlaceholder')" searchable />
+            <span v-if="cfgForm.provider === 'deepseek'" class="field-hint">DeepSeek 使用 OpenAI 兼容协议</span>
           </label>
           <label class="field">
             <span class="field-label">{{ t('settings.cfg.priority') }}</span>
             <input v-model.number="cfgForm.priority" class="input" type="number" min="0" max="999" />
             <span class="field-hint">{{ t('settings.cfg.priorityHint') }}</span>
           </label>
-          <label class="field"><span class="field-label">API Key</span><input v-model="cfgForm.api_key" class="input" type="password" placeholder="sk-..." /></label>
+          <label class="field"><span class="field-label">API Key</span><div class="config-row"><input v-model="cfgForm.api_key" class="input" :type="showCfgKey ? 'text' : 'password'" placeholder="sk-..." /><button type="button" class="btn btn-sm" @click="showCfgKey = !showCfgKey">{{ showCfgKey ? '隐藏' : '显示' }}</button></div></label>
           <label class="field"><span class="field-label">Base URL</span><input v-model="cfgForm.base_url" class="input" placeholder="https://..." /></label>
           <div class="field">
             <span class="field-label">{{ t('settings.cfg.models') }}</span>
@@ -689,7 +743,7 @@ import BaseSelect from '~/components/BaseSelect.vue'
 import { toast } from 'vue-sonner'
 import { toastError } from '~/composables/useToast'
 import { useI18n } from 'vue-i18n'
-import { aiConfigAPI, promptAPI, skillsAPI, storageAPI, stylePresetAPI, settingsAPI, serverUpdateAPI } from '~/composables/useApi'
+import { api, aiConfigAPI, promptAPI, skillsAPI, storageAPI, stylePresetAPI, settingsAPI, serverUpdateAPI, dramaAPI } from '~/composables/useApi'
 import { useDesktopBridge } from '~/composables/useDesktopBridge'
 import { useMigrateState } from '~/composables/useMigrateState'
 import { useTheme } from '~/composables/useTheme'
@@ -716,12 +770,128 @@ const cfgDialog = ref(false)
 const cfgEditId = ref(null)
 const cfgTesting = ref(false)
 const cfgTestResult = ref(null)
-const huobaoApiKey = ref('')
-const huobaoSaving = ref(false)
+const showCfgKey = ref(false)
+const localMuseKey = ref('')
+const showLocalMuseKey = ref(false)
+async function loadLocalMuseKey() { try { const r = await api.get('/settings/local-muse-key'); localMuseKey.value = r.key || '' } catch { localMuseKey.value = '' } }
+async function copyLocalMuseKey() { try { await navigator.clipboard.writeText(localMuseKey.value); toast.success('已复制 Muse2API 密钥') } catch { toast.error('复制失败，请显示后手动复制') } }
 // 火宝节点选择：默认跟随界面语言（中文→国内 .cn，其他→国外 .com），一键配置与取 Key 链接共用
-const huobaoRegion = ref(locale.value?.startsWith('zh') ? 'cn' : 'com')
-const huobaoSiteUrl = computed(() => `https://api.firemux.${huobaoRegion.value}`)
 const cfgForm = reactive({ name: '', provider: '', api_key: '', base_url: '', models: [], service_type: 'text', priority: 0, temperature: '' })
+const museStatus = ref(null)
+const promptProfile = ref('auto')
+async function loadPromptProfile() { try { const result = await api.get('/settings/video-prompt-profile'); promptProfile.value = result.mode || 'auto' } catch (e) { toastError(e) } }
+async function setPromptProfile(mode) { try { await api.put('/settings/video-prompt-profile', { mode }); promptProfile.value = mode; toast.success(t('videoPromptMode.saved')) } catch (e) { toastError(e) } }
+const exportProject = ref('')
+const exportProjects = ref([])
+onMounted(async () => { try { const r = await dramaAPI.list(); exportProjects.value = r.items || [] } catch {} })
+const agentActivity = ref([])
+async function loadAgentActivity() { try { const r = await fetch('/api/v1/settings/agent-activity', { cache: 'no-store' }); const j = await r.json(); agentActivity.value = j.data?.entries || [] } catch { toast.error('读取活动记录失败') } }
+onMounted(() => { loadAgentActivity(); loadPromptProfile(); loadLocalMuseKey() })
+const museCurrentToken = ref('')
+const museNewToken = ref('')
+const showMuseCurrentToken = ref(false)
+const showMuseToken = ref(false)
+const museSaving = ref(false)
+const otpStatus = ref(null)
+const otpCurrentCode = ref('')
+const otpNewCode = ref('')
+const otpQrSvg = ref('')
+const otpManualSecret = ref('')
+const otpSaving = ref(false)
+const otpError = ref('')
+async function loadOtpStatus() {
+  try {
+    const response = await fetch('/auth/status', { cache: 'no-store' })
+    otpStatus.value = response.ok ? await response.json() : null
+  } catch { otpStatus.value = null }
+}
+function cancelOtpRebind() {
+  otpQrSvg.value = ''
+  otpManualSecret.value = ''
+  otpNewCode.value = ''
+  otpError.value = ''
+}
+async function otpRequest(path, body) {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  })
+  const result = await response.json()
+  if (!response.ok) throw new Error(result.error || 'OTP 验证失败')
+  return result
+}
+async function startOtpRebind() {
+  otpError.value = ''
+  if (!/^\d{6}$/.test(otpCurrentCode.value.trim())) { otpError.value = '请输入当前验证器的 6 位动态码'; return }
+  otpSaving.value = true
+  try {
+    const result = await otpRequest('/auth/enroll/start', { current_code: otpCurrentCode.value.trim() })
+    otpQrSvg.value = result.qr_svg
+    otpManualSecret.value = result.manual_secret
+  } catch (error) { otpError.value = error.message || '生成二维码失败' }
+  finally { otpSaving.value = false }
+}
+async function confirmOtpRebind() {
+  otpError.value = ''
+  if (!/^\d{6}$/.test(otpNewCode.value.trim())) { otpError.value = '请输入新验证器的 6 位动态码'; return }
+  otpSaving.value = true
+  try {
+    await otpRequest('/auth/enroll/confirm', { current_code: otpCurrentCode.value.trim(), new_code: otpNewCode.value.trim() })
+    cancelOtpRebind()
+    otpCurrentCode.value = ''
+    await loadOtpStatus()
+    toast.success('OTP 验证设备已换绑')
+  } catch (error) { otpError.value = error.message || '换绑失败' }
+  finally { otpSaving.value = false }
+}
+async function loadMuseStatus() {
+  try {
+    const response = await fetch('/api/v1/settings/muse-connector', { cache: 'no-store' })
+    museStatus.value = response.ok ? await response.json() : null
+    if (museStatus.value?.current_token) museCurrentToken.value = museStatus.value.current_token
+  } catch { museStatus.value = null }
+}
+async function copyMuseToken() {
+  try {
+    await navigator.clipboard.writeText(museCurrentToken.value)
+    toast.success('当前 Muse 令牌已复制')
+  } catch { toast.error('复制失败，请显示令牌后手动复制') }
+}
+function museClientConfig(includeToken) {
+  return JSON.stringify({ mcpServers: { 'huobao-muse': { url: museStatus.value?.mcp_url || '请先连接 MCP 服务', headers: { Authorization: `Bearer ${includeToken ? museCurrentToken.value : '<当前令牌>'}` } } } }, null, 2)
+}
+async function copyMuseClientConfig() {
+  try {
+    await navigator.clipboard.writeText(museClientConfig(true))
+    toast.success('MCP JSON 配置已复制')
+  } catch { toast.error('复制失败，请检查浏览器剪贴板权限') }
+}
+function generateMuseToken() {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  museNewToken.value = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+  showMuseToken.value = true
+}
+async function saveMuseToken() {
+  if (!museCurrentToken.value) { toast.warning('请输入当前 Muse 令牌'); return }
+  if (!/^[A-Za-z0-9._~+/-]{24,256}$/.test(museNewToken.value)) { toast.warning('新令牌须为 24–256 位 Bearer 字符'); return }
+  museSaving.value = true
+  try {
+    const response = await fetch('/api/v1/settings/muse-connector/token', {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${museCurrentToken.value}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ new_token: museNewToken.value }),
+    })
+    if (!response.ok) throw new Error(response.status === 401 ? '当前令牌不正确' : '令牌保存失败')
+    museCurrentToken.value = museNewToken.value
+    museNewToken.value = ''
+    museStatus.value = { ...museStatus.value, token_configured: true }
+    toast.success('Muse 令牌已保存并生效')
+  } catch (error) { toast.error(error.message || '令牌保存失败') }
+  finally { museSaving.value = false }
+}
 // 模型标签编辑器：首位即默认模型；输入框支持回车添加、逗号/换行批量粘贴
 const modelInput = ref('')
 function addModel() {
@@ -750,7 +920,11 @@ const serviceTypes = computed(() => [
   { type: 'video', label: t('common.serviceType.video') },
 ])
 const providers = ['gemini', 'openai', 'volcengine', 'minimax', 'aliyun']
-const providerSelectOptions = computed(() => providers.map(p => ({ label: p, value: p })))
+const providerSelectOptions = computed(() => [
+  ...(cfgForm.service_type === 'text' ? [{ label: 'deepseek（OpenAI 兼容）', value: 'deepseek' }] : []),
+  ...providers.map(p => ({ label: p, value: p })),
+  ...(cfgForm.service_type === 'video' ? [{ label: 'Muse2API', value: 'muse2api' }] : []),
+])
 const serviceMeta = computed(() => ({
   text: { label: t('common.serviceType.text'), desc: t('settings.ai.meta.text') },
   image: { label: t('common.serviceType.image'), desc: t('settings.ai.meta.image') },
@@ -762,39 +936,29 @@ const providerPresets = {
     openai: { label: 'OpenAI 官方', baseUrl: 'https://api.openai.com', models: ['deepseek-v4-pro', 'gpt-5.6-terra'] },
   },
   image: {
+    muse2api: { provider: 'openai', label: 'Muse2API 图片', baseUrl: 'http://127.0.0.1:18611', models: ['muse-image'] },
     gemini: { label: 'Gemini 官方', baseUrl: 'https://generativelanguage.googleapis.com', models: ['gemini-3-pro-image', 'gemini-3.1-flash-image'] },
     openai: { label: 'OpenAI 官方', baseUrl: 'https://api.openai.com', models: ['gpt-image-2'] },
   },
   video: {
+    muse2api: { label: 'Muse2API 视频', baseUrl: 'http://127.0.0.1:18611', models: ['muse-video'] },
     aliyun: { label: '阿里云百炼 Wan 3.0', baseUrl: 'https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com', models: ['wan3.0-video', 'wan3.0-video-prime'] },
     volcengine: { label: 'Seedance 2.0 官方', baseUrl: 'https://ark.cn-beijing.volces.com', models: ['doubao-seedance-2-0-mini-260615', 'doubao-seedance-2-0-fast-260128', 'doubao-seedance-2-0-260128'] },
     minimax: { label: 'MiniMax H3 官方', baseUrl: 'https://api.minimaxi.com', models: ['MiniMax-H3'] },
   },
 }
-const huobaoQuickConfigs = computed(() => {
-  const base = huobaoSiteUrl.value
-  return [
-    { service_type: 'text', provider: 'gemini', name: '火宝文本服务 · Gemini', base_url: base, model: ['gemini-3.8-flash', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview'], priority: 101 },
-    { service_type: 'text', provider: 'openai', name: '火宝文本服务 · OpenAI', base_url: base, model: ['deepseek-v4-pro', 'deepseek-v4-flash', 'gpt-5.6-terra'], priority: 100 },
-    { service_type: 'image', provider: 'openai', name: '火宝图片服务 · OpenAI', base_url: base, model: ['gpt-image-2'], priority: 99 },
-    { service_type: 'image', provider: 'gemini', name: '火宝图片服务 · Gemini', base_url: base, model: ['gemini-3-pro-image', 'gemini-3.1-flash-image'], priority: 97 },
-    { service_type: 'video', provider: 'aliyun', name: '火宝视频服务 · Wan 3.0', base_url: `${base}/qwen`, model: ['wan3.0-video', 'wan3.0-video-prime'], priority: 97 },
-    { service_type: 'video', provider: 'volcengine', name: '火宝视频服务 · Seedance', base_url: `${base}/volcengine`, model: ['doubao-seedance-2-0-mini-260615', 'doubao-seedance-2-0-fast-260128', 'doubao-seedance-2-0-260128'], priority: 96 },
-    { service_type: 'video', provider: 'minimax', name: '火宝视频服务 · MiniMax', base_url: `${base}/minimax`, model: ['MiniMax-H3'], priority: 98 },
-  ]
-})
 
 function byType(t) { return cfgs.value.filter(c => c.service_type === t) }
 function countActive(t) { return byType(t).filter(c => c.is_active).length }
 function fmtModel(m) { return Array.isArray(m) ? m.join(', ') : m || '—' }
 function presetsByType(type) {
   const group = providerPresets[type] || {}
-  return Object.entries(group).map(([provider, preset]) => ({ provider, ...preset }))
+  return Object.entries(group).map(([key, preset]) => ({ key, provider: preset.provider || key, ...preset }))
 }
-function applyProviderPreset(type, provider) {
-  const preset = providerPresets[type]?.[provider]
+function applyProviderPreset(type, key) {
+  const preset = providerPresets[type]?.[key]
   if (!preset) return
-  cfgForm.provider = provider
+  cfgForm.provider = preset.provider || key
   cfgForm.base_url = preset.baseUrl
   cfgForm.models = [...preset.models]
   // 配置名持久化进 DB：用 provider 英文 + 服务类型英文标识拼，不随界面语言漂移
@@ -837,35 +1001,18 @@ async function setDefaultModel(type, c, m) {
 }
 async function toggleCfg(c) { await aiConfigAPI.update(c.id, { is_active: !c.is_active }); loadCfgs() }
 async function delCfg(id) { await aiConfigAPI.del(id); toast.success(t('index.deleted')); loadCfgs() }
-async function applyHuobaoQuickConfig() {
-  const apiKey = huobaoApiKey.value.trim()
-  if (!apiKey) { toast.warning(t('settings.ai.apiKeyRequired')); return }
-  huobaoSaving.value = true
-  try {
-    for (const preset of huobaoQuickConfigs.value) {
-      const payload = { ...preset, api_key: apiKey }
-      const existing = cfgs.value.find(c => c.name === preset.name || (c.service_type === preset.service_type && c.provider === preset.provider && c.base_url === preset.base_url))
-      if (existing) await aiConfigAPI.update(existing.id, payload)
-      else await aiConfigAPI.create(payload)
-    }
-    toast.success(t('settings.ai.quickApplied'))
-    huobaoApiKey.value = ''
-    await loadCfgs()
-  } catch (e) {
-    toastError(e)
-  } finally {
-    huobaoSaving.value = false
-  }
-}
+
 function startAddCfg(t) {
+  showCfgKey.value = false
   cfgEditId.value = null
   cfgTestResult.value = null
   Object.assign(cfgForm, { name: '', provider: '', api_key: '', base_url: '', models: [], service_type: t, priority: 0, temperature: '' })
   const firstPreset = presetsByType(t)[0]
-  if (firstPreset) applyProviderPreset(t, firstPreset.provider)
+  if (firstPreset) applyProviderPreset(t, firstPreset.key)
   cfgDialog.value = true
 }
 function startEditCfg(c) {
+  showCfgKey.value = false
   cfgEditId.value = c.id
   cfgTestResult.value = null
   Object.assign(cfgForm, {
@@ -1223,7 +1370,7 @@ async function saveStyle() {
   } catch (e) { toastError(e) }
 }
 
-onMounted(() => { loadCfgs(); loadAgents(); loadAllSkills(); loadAgentPrompt(selectedAgent.value); loadStylePresets() })
+onMounted(() => { loadCfgs(); loadMuseStatus(); loadAgents(); loadAllSkills(); loadAgentPrompt(selectedAgent.value); loadStylePresets() })
 
 // ===== 应用内引导（设置页）：快捷配置 + 手动模板两步 =====
 const SETTINGS_TOUR = [
@@ -1237,6 +1384,8 @@ function replaySettingsTour() { startTour('settings', SETTINGS_TOUR, t) }
 const desktopBridge = useDesktopBridge()
 const { begin: beginMigrate, update: updateMigrate, end: endMigrate } = useMigrateState()
 
+const localStorageTarget = ref('')
+async function scheduleLocalStorage() { try { await api.post('/storage/local-location', { target: localStorageTarget.value.trim() }); toast.success('已保存，请停止火宝后重新启动以迁移数据') } catch (e) { toastError(e) } }
 const storageInfo = ref(null)
 const migrateDialog = ref(false)
 const migrateTarget = ref('')
@@ -1271,6 +1420,7 @@ async function loadStorage() {
 watch(tab, (active) => {
   if (active === 'storage') loadStorage()
   else stopUsagePoll()
+  if (active === 'general') { cancelOtpRebind(); loadOtpStatus() }
 })
 
 async function pickTarget() {
@@ -1395,6 +1545,9 @@ onBeforeUnmount(stopUsagePoll)
 </script>
 
 <style scoped>
+.otp-qr { width: 220px; height: 220px; padding: 10px; margin: 8px 0; background: #fff; border-radius: 10px; }
+.otp-qr :deep(svg) { width: 100%; height: 100%; }
+.otp-error { color: var(--danger, #c43b35); }
 .settings-page { display: flex; flex-direction: column; height: 100%; background: var(--bg-base); }
 
 .settings-layout { display: flex; flex: 1; min-height: 0; }

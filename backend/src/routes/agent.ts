@@ -37,6 +37,7 @@ app.post('/:type/chat', async (c) => {
 
   const body = await c.req.json()
   const { message, drama_id, episode_id } = body
+  if (body.video_prompt_mode != null && !['muse', 'muse_skill', 'other'].includes(body.video_prompt_mode)) return badRequest(c, '无效的视频提示词模式')
 
   logTaskStart('Agent', agentType, {
     dramaId: drama_id,
@@ -59,8 +60,10 @@ app.post('/:type/chat', async (c) => {
   const requestContext = buildAgentRequestContext({
     episodeId: episode_id,
     dramaId: drama_id,
+    promptFieldsOnly: agentType === 'prompt_generator',
     modelOverride: body.model || undefined,
     textConfigId: body.config_id || undefined,
+    videoPromptMode: body.video_prompt_mode || undefined,
   })
 
   const startTime = performance.now()

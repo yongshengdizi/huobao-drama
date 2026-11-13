@@ -174,7 +174,7 @@
             </div>
             <div class="toolbar-right">
               <span v-if="rawLen" class="char-count">{{ t('episode.script.charCount', { n: rawLen }) }}</span>
-              <button class="btn btn-sm" @click="saveRaw(); toast.success(t('episode.script.saved'))">
+              <button class="btn btn-sm" @click="saveRaw().then(ok => { if (ok) toast.success(t('episode.script.saved')) })">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 {{ t('common.save') }}
               </button>
@@ -489,12 +489,20 @@
               <span class="tag mono">{{ t('episode.sb.segmentStat', { n: sbs.length, dur: totalDuration }) }}</span>
               <span class="tag mono" :title="t('episode.vid.aspectRatio')">{{ dramaAspectRatio }}</span>
               <div class="ml-auto flex gap-1">
+                <label class="dim" for="video-prompt-mode">{{ t('videoPromptMode.label') }}</label>
+                <select id="video-prompt-mode" v-model="videoPromptMode" class="input" :disabled="videoPromptBatch.running" :title="t('videoPromptMode.help')">
+                  <option value="settings">{{ t('videoPromptMode.settings') }}</option>
+                  <option value="auto">{{ t('videoPromptMode.auto') }}</option>
+                  <option value="muse">{{ t('videoPromptMode.muse') }}</option>
+                  
+                  <option value="other">{{ t('videoPromptMode.other') }}</option>
+                </select>
                 <button class="btn btn-sm" :disabled="rn" @click="doBreakdown">
                   <Loader2 v-if="rt === 'storyboard_breaker'" :size="11" class="animate-spin" />
                   <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                   {{ sbs.length ? t('episode.sb.rebreak') : t('episode.sb.startBreak') }}
                 </button>
-                <button class="btn btn-sm" :disabled="videoPromptBatch.running || !sbs.length" @click="batchVideoPrompts">
+                <button class="btn btn-sm" :disabled="videoPromptBatch.running || !sbs.length" @click="batchVideoPrompts()">
                   <Loader2 v-if="videoPromptBatch.running" :size="11" class="animate-spin" />
                   <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                   {{ videoPromptBatch.running ? t('episode.sb.promptProgress', { done: videoPromptBatch.completed, total: videoPromptBatch.total }) : (videoSelectMode && selectedVideoSbIds.length ? t('episode.sb.promptSelected', { n: selectedVideoSbIds.length }) : t('episode.sb.batchPrompts')) }}
@@ -2727,19 +2735,27 @@ async function refresh() {
   await Promise.all([loadGenTasks(), loadExportMerges()])
 }
 
-function saveRaw() { episodeAPI.update(epId.value, { content: localRaw.value }); episode.value.content = localRaw.value }
-function saveScr() { episodeAPI.update(epId.value, { script_content: localScript.value }); episode.value.script_content = localScript.value }
+async function saveEpisodeText(field, value) {
+  const snapshot = { content: episode.value?.content ?? null, script_content: episode.value?.script_content ?? episode.value?.scriptContent ?? null }
+  try {
+    await episodeAPI.update(epId.value, { [field]: value, expected_snapshot: snapshot })
+    episode.value[field] = value
+    return true
+  } catch (e) { toastError(e); return false }
+}
+function saveRaw() { return saveEpisodeText('content', localRaw.value) }
+function saveScr() { return saveEpisodeText('script_content', localScript.value) }
 // 发给 Agent 的 message 是功能性提示词而非 UI 文案：产出语言由后端全局「内容语言」指令控制，
 // 这里保持中文不随界面语言变化
-function doRewrite() { saveRaw(); runAgent('script_rewriter', '请读取剧本并改写为格式化剧本，然后保存', dramaId, epId.value, refresh, chatModelOverride(), chatConfigId()) }
-function skipRewrite() {
+async function doRewrite() { if (await saveRaw()) runAgent('script_rewriter', '请读取剧本并改写为格式化剧本，然后保存', dramaId, epId.value, refresh, chatModelOverride(), chatConfigId()) }
+async function skipRewrite() {
   const raw = (localRaw.value || rawContent.value || '').trim()
   if (!raw) {
     toast.warning(t('episode.script.rawRequired'))
     return
   }
   localScript.value = raw
-  saveScr()
+  if (!await saveScr()) return
   toast.success(t('episode.script.skipDone'))
   panel.value = 'production'
   prodTab.value = 'assets'
@@ -2755,9 +2771,9 @@ const extractingTargets = ref([])
 const extractingLabels = computed(() => EXTRACT_TARGETS.value.filter(x => extractingTargets.value.includes(x.key)).map(x => x.label).join(t('common.listJoin')))
 function isExtracting(target) { return extractingTargets.value.includes(target) }
 
-function doExtract(target) {
+async function doExtract(target) {
   if (isExtracting(target) || !epId.value) return
-  saveScr()
+  if (!await saveScr()) return
   extractingTargets.value.push(target)
   episodeAPI.extract(epId.value, target, chatModelOverride(), chatConfigId())
     .then(() => pollExtractStatus(target))
@@ -2813,6 +2829,14 @@ async function syncExtractStatus() {
 }
 
 // ─── 批量视频提示词：后端异步逐分镜生成，前端轮询进度 ──────────
+const videoPromptMode = ref('settings')
+const savedVideoPromptMode = ref('auto')
+async function loadVideoPromptMode() { try { const result = await api.get('/settings/video-prompt-profile'); savedVideoPromptMode.value = result.mode || 'auto' } catch (e) { toastError(e) } }
+onMounted(loadVideoPromptMode)
+const effectiveVideoPromptMode = computed(() => {
+  const mode = videoPromptMode.value === 'settings' ? savedVideoPromptMode.value : videoPromptMode.value
+  return mode === 'auto' ? (selectedVideoConfig.value?.provider === 'muse2api' || /^muse-video(?:$|[-_])/i.test(effectiveVideoModelLabel.value) ? 'muse' : 'other') : mode
+})
 const videoPromptBatch = ref({ running: false, total: 0, completed: 0 })
 // 单个视频提示词生成：按分镜 ID 跟踪，允许不同分镜并行生成（不走全局 rn 锁）
 const videoPromptGeneratingIds = ref([])
@@ -2824,13 +2848,13 @@ function selectMissingVideos() {
   selectedVideoSbIds.value = sbs.value.filter(sb => !hasVid(sb)).map(sb => sb.id)
 }
 
-async function batchVideoPrompts() {
+async function batchVideoPrompts(mode = effectiveVideoPromptMode.value) {
   if (videoPromptBatch.value.running || !epId.value) return
   if (!sbs.value.length) { toast.warning(t('episode.sb.breakFirst')); return }
   // 选择模式下有勾选 → 仅补齐所选；否则全量补齐缺失
   const ids = (videoSelectMode.value && selectedVideoSbIds.value.length) ? [...selectedVideoSbIds.value] : undefined
   try {
-    const res = await episodeAPI.generateVideoPrompts(epId.value, chatModelOverride(), chatConfigId(), ids)
+    const res = await episodeAPI.generateVideoPrompts(epId.value, chatModelOverride(), chatConfigId(), ids, mode)
     if (!res?.total) {
       if (res?.already_running) {
         videoPromptBatch.value = { running: true, total: 0, completed: 0 }
@@ -2872,6 +2896,7 @@ function pollVideoPromptBatch(attempts = 240) {
   setTimeout(() => tick(attempts), 2500)
 }
 function doBreakdown() {
+  const mode = effectiveVideoPromptMode.value
   const charList = chars.value.length
     ? chars.value.map(c => `${c.name}(ID:${c.id})`).join('、')
     : '（当前集还没有角色）'
@@ -2892,14 +2917,14 @@ function doBreakdown() {
 - 每个镜头必须根据剧本内容，从上述当前集已有角色中选出出场的角色绑定 character_ids（ID 必须来自上述列表；有角色出场就必须绑定，不要遗漏）
 - 每个镜头尽量匹配上述已有场景填写 scene_id（ID 必须来自上述列表），不要凭空创造新场景
 - 每个镜头出现关键道具（被使用、交接、特写或在画面中明显可见）时，从上述当前集已有道具中绑定 prop_ids（ID 必须来自上述列表）；没有道具出现可传空数组
-- 只有纯环境空镜头才可以不绑定角色`, dramaId, epId.value, onBreakdownDone, chatModelOverride(), chatConfigId())
+- 只有纯环境空镜头才可以不绑定角色`, dramaId, epId.value, () => onBreakdownDone(mode), chatModelOverride(), chatConfigId(), mode)
 }
 
 /** 拆分完成后刷新并自动补齐缺失的视频提示词（兜住 Agent 漏写/截断） */
-async function onBreakdownDone() {
+async function onBreakdownDone(mode) {
   await refresh()
   const missing = sbs.value.filter(sb => !(sb.video_prompt || sb.videoPrompt || '').trim())
-  if (missing.length) batchVideoPrompts()
+  if (missing.length) batchVideoPrompts(mode)
 }
 
 // 按需为单个分镜生成视频提示词：由 prompt_generator 读取分镜字段生成并保存到 video_prompt
@@ -2917,9 +2942,10 @@ async function genVideoPrompt(sb) {
 
 该分镜信息:时长 ${sb.duration || 10}s;场景:${getSceneName(sb) || '未绑定'};角色:${charNames};道具:${propNames}。
 
-请先调用 read_storyboard_context 获取该分镜的画面描述(含【镜头N】子镜头与台词/旁白)、氛围及时长,据此生成 video_prompt(按 3 秒分段换行、用 @角色名/@场景名/@道具名 引用参考素材；段落内允许多镜头切镜,但不跨场景,切镜点对齐 description 的【镜头N】结构),然后调用 update_storyboard 保存到分镜 ID:${sb.id}。只更新 video_prompt 字段,不要改动其他字段,不要重新拆分整集。`,
+请先调用 read_storyboard_context 获取该分镜的画面描述(含【镜头N】子镜头与台词/旁白)、氛围及时长,据此按本次视频提示词模式生成 video_prompt，保留原分镜顺序和绑定素材,然后调用 update_storyboard 保存到分镜 ID:${sb.id}。只更新 video_prompt 字段,不要改动其他字段,不要重新拆分整集。`,
       drama_id: dramaId,
       episode_id: epId.value,
+      video_prompt_mode: effectiveVideoPromptMode.value,
       model: chatModelOverride() || undefined,
       config_id: chatConfigId() || undefined,
     })

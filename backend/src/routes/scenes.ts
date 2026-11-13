@@ -1,3 +1,4 @@
+import { validEpisode, linkEpisode } from '../utils/episode-link.js'
 import { Hono } from 'hono'
 import { and, eq } from 'drizzle-orm'
 import { db, getInsertId, schema } from '../db/index.js'
@@ -13,6 +14,7 @@ const app = new Hono()
 app.post('/', async (c) => {
   const body = await c.req.json()
   if (!body.drama_id) return badRequest(c, 'drama_id 必填')
+  if (body.episode_id !== undefined && !(await validEpisode(body.drama_id, body.episode_id))) return badRequest(c, 'episode_id 必须属于当前剧')
   if (!body.location?.trim()) return badRequest(c, '地点必填')
   const ts = now()
   const res = await db.insert(schema.scenes).values({
@@ -42,6 +44,12 @@ app.post('/', async (c) => {
 app.put('/:id', async (c) => {
   const id = Number(c.req.param('id'))
   const body = await c.req.json()
+  if (body.episode_id !== undefined) {
+    const [entity] = await db.select().from(schema.scenes).where(eq(schema.scenes.id, id))
+    if (!entity || entity.deletedAt) return badRequest(c, '素材不存在')
+    if (!(await validEpisode(entity.dramaId, body.episode_id))) return badRequest(c, 'episode_id 必须属于当前剧')
+    await linkEpisode('scene', Number(body.episode_id), id)
+  }
   const updates: Record<string, any> = { updatedAt: now() }
   if (body.location !== undefined) updates.location = body.location
   if (body.time !== undefined) updates.time = body.time
@@ -87,7 +95,7 @@ app.post('/:id/generate-image', async (c) => {
   try {
     logTaskStart('SceneImage', 'generate', { sceneId: id, episodeId: ep.id, dramaId: scene.dramaId, location: scene.location })
     await db.update(schema.scenes).set({ status: 'processing', updatedAt: now() }).where(eq(schema.scenes.id, id))
-    const genId = await generateImage({ sceneId: id, dramaId: scene.dramaId, prompt, model: body.model, configId: body.config_id ?? ep.imageConfigId ?? undefined })
+    const genId = await generateImage({ episodeId: ep.id, sceneId: id, dramaId: scene.dramaId, prompt, model: body.model, configId: body.config_id ?? ep.imageConfigId ?? undefined })
     logTaskSuccess('SceneImage', 'generate', { sceneId: id, generationId: genId })
     return success(c, { image_generation_id: genId })
   } catch (err: any) {

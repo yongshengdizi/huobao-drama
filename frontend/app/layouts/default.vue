@@ -83,7 +83,8 @@ async function checkAiConfigs() {
   } catch { /* 配置检查失败不阻塞页面 */ }
 }
 
-onMounted(checkAiConfigs)
+onMounted(() => { checkAiConfigs(); window.addEventListener('generation-mode-changed', checkAiConfigs) })
+onUnmounted(() => window.removeEventListener('generation-mode-changed', checkAiConfigs))
 // 设置页保存配置后返回时重新检查(布局跨页面复用,onMounted 只触发一次)
 watch(() => route.path, checkAiConfigs)
 // 切换界面语言时横幅中已拼接的类型文案需要重算
